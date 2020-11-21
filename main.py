@@ -144,14 +144,14 @@ for line in obj:
                       [int(cur2[0]) - 1, int(cur2[1]) - 1, int(cur2[2]) - 1],
                       [int(cur3[0]) - 1, int(cur3[1]) - 1, int(cur3[2]) - 1]])
 Mo2w = R(0, 'z').dot(R(0, 'y').dot(R(0, 'x').dot(T(0, 0, 0).dot(S(0.8, 0.8, 0.8)))))
-M = Mw2c(np.array([0, 0, 0]), np.array([0, 0, 0])).dot(Mo2w)
+# M = Mw2c(np.array([0, 0, 0]), np.array([0, 0, 0])).dot(Mo2w)
 # print(Mw2c(0, 0, 0, -4, -4, -2).dot(T(-2, -2, -2).dot(np.array([2, 2, 2, 1]))))
 
 # MT = Mw2c(2, 2, 2, -2, -2, 0).T.dot(
 #     R(15, 'z').T.dot(R(280, 'y').T.dot(R(5, 'x').T.dot(T(-1, 0, -2).T.dot(S(0.8, 0.8, 0.8).T)))))
 
 for i in range(len(vertices)):
-    new_vertices.append(M.dot(vertices[i]))
+    new_vertices.append(vertices[i])#.dot(vertices[i]))
 # for i in range(len(normals_v)):
 #     new_normals_v.append(MT.dot(normals_v[i]))
 
