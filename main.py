@@ -143,15 +143,15 @@ for line in obj:
         faces.append([[int(cur1[0]) - 1, int(cur1[1]) - 1, int(cur1[2]) - 1],
                       [int(cur2[0]) - 1, int(cur2[1]) - 1, int(cur2[2]) - 1],
                       [int(cur3[0]) - 1, int(cur3[1]) - 1, int(cur3[2]) - 1]])
-Mo2w = R(0, 'z').dot(R(0, 'y').dot(R(0, 'x').dot(T(0, 0, 0).dot(S(0.8, 0.8, 0.8)))))
-# M = Mw2c(np.array([0, 0, 0]), np.array([0, 0, 0])).dot(Mo2w)
-# print(Mw2c(0, 0, 0, -4, -4, -2).dot(T(-2, -2, -2).dot(np.array([2, 2, 2, 1]))))
+
+Mo2w = R(15, 'z').dot(R(10, 'y').dot(R(5, 'x').dot(T(-1, 0, -2).dot(S(0.8, 0.8, 0.8)))))
+M = Mw2c(np.array([2, 2, 2]), np.array([-2, -2, 0])).dot(Mo2w)
 
 # MT = Mw2c(2, 2, 2, -2, -2, 0).T.dot(
 #     R(15, 'z').T.dot(R(280, 'y').T.dot(R(5, 'x').T.dot(T(-1, 0, -2).T.dot(S(0.8, 0.8, 0.8).T)))))
 
 for i in range(len(vertices)):
-    new_vertices.append(vertices[i])#.dot(vertices[i]))
+    new_vertices.append(M.dot(vertices[i]))
 # for i in range(len(normals_v)):
 #     new_normals_v.append(MT.dot(normals_v[i]))
 
@@ -182,8 +182,8 @@ for face in faces:
     # vn2 = new_normals_v[face[1][2]]
     # vn3 = new_normals_v[face[2][2]]
 
-    #if back_face_culling(camera, v1, v2, v3):
-    #    continue
+    if back_face_culling(camera, v1, v2, v3):
+        continue
 
     v1 = M.dot(v1)
     v2 = M.dot(v2)
@@ -199,8 +199,8 @@ for face in faces:
             a, b, c = get_barycentric_coords([i, j], v1, v2, v3)
             if a >= 0 and b >= 0 and c >= 0:
                 z = a * v1[2] + b * v2[2] + c * v3[2]
-                if z < z_buffer[1024 - j, i]:
-                    z_buffer[1024 - j, i] = z
+                if -z < z_buffer[1024 - j, i]:
+                    z_buffer[1024 - j, i] = -z
                     u = a * texture_v[face[0][1]][0] + b * texture_v[face[1][1]][0] + c * texture_v[face[2][1]][0]
                     v = a * texture_v[face[0][1]][1] + b * texture_v[face[1][1]][1] + c * texture_v[face[2][1]][1]
                     image[1024 - j][i] = texture[1024 - round(v * len(texture))][round(u * len(texture[0]))]
