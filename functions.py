@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.image as img
 
 
-def draw_line(x0, y0, x1, y1, image, color):
+def draw_line(x0, y0, x1, y1, image, color, location_x, location_y, view_height):
     sign_x = np.sign(x1 - x0)
     sign_y = np.sign(y1 - y0)
 
@@ -18,7 +18,7 @@ def draw_line(x0, y0, x1, y1, image, color):
 
     x_cur, y_cur = x0, y0
     error = d / 2
-    image[-y_cur, x_cur] = color
+    image[view_height - y_cur, x_cur] = color
 
     for i in range(d):
         error -= dd
@@ -31,7 +31,7 @@ def draw_line(x0, y0, x1, y1, image, color):
                 x_cur += sign_x
             else:
                 y_cur += sign_y
-        image[-y_cur, x_cur] = color
+        image[view_height - y_cur, x_cur] = color
 
 
 def R(ang, ax):
@@ -99,10 +99,10 @@ def back_face_culling(p, v0, v1, v2):
     nn = norm(np.cross(v1, v2))
     s = np.inner(np.array([0, 0, -1]), nn)
     # s = np.inner(v0, nn)
-    return s >= 0
+    return s
 
 
-def get_barycentric_coords(p, v0, v1, v2):
+def get_barycentric_coordinates(p, v0, v1, v2):
     aa0 = p[0] - v0[0]
     aa1 = p[1] - v0[1]
     bb0 = v1[0] - v0[0]
@@ -153,43 +153,54 @@ class WorldToCamera:
         return L.dot(R)
 
 
-def get_texture_image(obj_path: str, texture_path: str,
-                      view_height: int, view_width: int, image_height: int, image_width: int,
-                      l2w: LocalToWorld, w2c: WorldToCamera,
-                      location_image_x: int, location_image_y: int):
-    with open(obj_path) as file:
-        obj = file.readlines()
+class Model:
+    def __init__(self, obj_path: str, texture_path: str):
+        self.obj_path = obj_path
+        self.texture_path = texture_path
 
-    texture_img = img.imread(texture_path)
-    vertices = []
-    texture_v = []
-    faces = []
+        with open(obj_path) as file:
+            obj = file.readlines()
+
+        self.texture_img = img.imread(texture_path)
+        self.vertices = []
+        self.new_vertices = []
+        self.texture_v = []
+        self.faces = []
+
+        for line in obj:
+            temp = line[:-1].split()
+            if len(temp) == 0:
+                continue
+            elif temp[0] == 'v':
+                self.vertices.append(np.array([float(temp[1]), float(temp[2]), float(temp[3]), 1]))
+            elif temp[0] == 'vt':
+                self.texture_v.append([float(temp[1]), float(temp[2])])
+            elif temp[0] == 'f':
+                cur1 = temp[1].split('/')
+                cur2 = temp[2].split('/')
+                cur3 = temp[3].split('/')
+                self.faces.append([[int(cur1[0]) - 1, int(cur1[1]) - 1],
+                                   [int(cur2[0]) - 1, int(cur2[1]) - 1],
+                                   [int(cur3[0]) - 1, int(cur3[1]) - 1]])
+
+    def create_camera_coordinates(self, l2w: LocalToWorld, w2c: WorldToCamera):
+        m = w2c.get_matrix().dot(l2w.get_matrix())
+        for i in range(len(self.vertices)):
+            self.new_vertices.append(m.dot(self.vertices[i]))
+        return self.new_vertices
+
+
+def get_wire_image(view_height: int, view_width: int, image_height: int, image_width: int,
+                   location_image_x: int, location_image_y: int, model: Model):
     image = np.zeros((view_height, view_width, 3), dtype=np.uint8)
-    z_buffer = np.ones((image_height, image_width), dtype=np.float)
+    image[:] = np.array([150, 150, 150])
 
     for j in range(location_image_y, location_image_y + image_height):
         for i in range(location_image_x, location_image_x + image_width):
-            image[view_height - j][i] = np.array([150, 150, 150], dtype=np.uint8)
+            image[view_height - j - 1][i] = np.array([0, 0, 0], dtype=np.uint8)
 
-    for line in obj:
-        temp = line[:-1].split()
-        if len(temp) == 0:
-            continue
-        elif temp[0] == 'v':
-            vertices.append(np.array([float(temp[1]), float(temp[2]), float(temp[3]), 1]))
-        elif temp[0] == 'vt':
-            texture_v.append([float(temp[1]), float(temp[2])])
-        elif temp[0] == 'f':
-            cur1 = temp[1].split('/')
-            cur2 = temp[2].split('/')
-            cur3 = temp[3].split('/')
-            faces.append([[int(cur1[0]) - 1, int(cur1[1]) - 1],
-                          [int(cur2[0]) - 1, int(cur2[1]) - 1],
-                          [int(cur3[0]) - 1, int(cur3[1]) - 1]])
-
-    m = w2c.get_matrix().dot(l2w.get_matrix())
-    for i in range(len(vertices)):
-        vertices[i] = m.dot(vertices[i])
+    vertices = model.new_vertices
+    faces = model.faces
 
     ll = min(vertices, key=lambda x: x[0])
     rr = max(vertices, key=lambda x: x[0])
@@ -212,7 +223,121 @@ def get_texture_image(obj_path: str, texture_path: str,
         v2 = vertices[face[1][0]]
         v3 = vertices[face[2][0]]
 
-        if back_face_culling([0, 0, 0], v1, v2, v3):
+        v1 = m.dot(v1)
+        v2 = m.dot(v2)
+        v3 = m.dot(v3)
+
+        draw_line(round(v1[0]), round(v1[1]), round(v2[0]), round(v2[1]), image, np.array([255, 255, 255]),
+                  location_image_x, location_image_y, view_height)
+        draw_line(round(v1[0]), round(v1[1]), round(v3[0]), round(v3[1]), image, np.array([255, 255, 255]),
+                  location_image_x, location_image_y, view_height)
+        draw_line(round(v2[0]), round(v2[1]), round(v3[0]), round(v3[1]), image, np.array([255, 255, 255]),
+                  location_image_x, location_image_y, view_height)
+
+    return image
+
+
+def get_face_image(view_height: int, view_width: int, image_height: int, image_width: int,
+                   location_image_x: int, location_image_y: int, model: Model):
+    image = np.zeros((view_height, view_width, 3), dtype=np.uint8)
+    z_buffer = np.ones((view_height, view_width), dtype=np.float)
+    image[:] = np.array([150, 150, 150])
+
+    for j in range(location_image_y, location_image_y + image_height):
+        for i in range(location_image_x, location_image_x + image_width):
+            image[view_height - j - 1][i] = np.array([0, 0, 0], dtype=np.uint8)
+
+    vertices = model.new_vertices
+    faces = model.faces
+
+    ll = min(vertices, key=lambda x: x[0])
+    rr = max(vertices, key=lambda x: x[0])
+    bb = min(vertices, key=lambda x: x[1])
+    tt = max(vertices, key=lambda x: x[1])
+    nn = min(vertices, key=lambda x: x[2])
+    ff = max(vertices, key=lambda x: x[2])
+
+    l = ll[0] - (rr[0] - ll[0]) / 20
+    r = rr[0] + (rr[0] - ll[0]) / 20
+    b = bb[1] - (tt[1] - bb[1]) / 20
+    t = tt[1] + (tt[1] - bb[1]) / 20
+    n = nn[2] - (ff[2] - nn[2]) / 20
+    f = ff[2] + (ff[2] - nn[2]) / 20
+
+    m = m_view_port(location_image_x, location_image_y, image_width, image_height).dot(m_proj_o(l, r, b, t, n, f))
+
+    for face in faces:
+        v1 = vertices[face[0][0]]
+        v2 = vertices[face[1][0]]
+        v3 = vertices[face[2][0]]
+
+        color = back_face_culling([0, 0, 0], v1, v2, v3)
+
+        if color >= 0:
+            continue
+
+        color = np.abs(color)
+
+        color = np.array([color * 255, color * 255, color * 255])
+
+        v1 = m.dot(v1)
+        v2 = m.dot(v2)
+        v3 = m.dot(v3)
+
+        x_min = int(np.floor(min(v1, v2, v3, key=lambda x: x[0])[0]))
+        x_max = int(np.ceil(max(v1, v2, v3, key=lambda x: x[0])[0]))
+        y_min = int(np.floor(min(v1, v2, v3, key=lambda x: x[1])[1]))
+        y_max = int(np.ceil(max(v1, v2, v3, key=lambda x: x[1])[1]))
+
+        for i in range(x_min, x_max + 1):
+            for j in range(y_min, y_max + 1):
+                a, b, c = get_barycentric_coordinates([i, j], v1, v2, v3)
+                if a >= 0 and b >= 0 and c >= 0:
+                    z = a * v1[2] + b * v2[2] + c * v3[2]
+                    if -z < z_buffer[view_height - j, i]:
+                        z_buffer[view_height - j, i] = -z
+                        image[view_height - j][i] = color
+
+    return image
+
+
+def get_texture_image(view_height: int, view_width: int, image_height: int, image_width: int,
+                      location_image_x: int, location_image_y: int, model: Model):
+    image = np.zeros((view_height, view_width, 3), dtype=np.uint8)
+    z_buffer = np.ones((view_height, view_width), dtype=np.float)
+    image[:] = np.array([150, 150, 150])
+
+    for j in range(location_image_y, location_image_y + image_height):
+        for i in range(location_image_x, location_image_x + image_width):
+            image[view_height - j - 1][i] = np.array([0, 0, 0], dtype=np.uint8)
+
+    vertices = model.new_vertices
+    texture_img = model.texture_img
+    texture_v = model.texture_v
+    faces = model.faces
+
+    ll = min(vertices, key=lambda x: x[0])
+    rr = max(vertices, key=lambda x: x[0])
+    bb = min(vertices, key=lambda x: x[1])
+    tt = max(vertices, key=lambda x: x[1])
+    nn = min(vertices, key=lambda x: x[2])
+    ff = max(vertices, key=lambda x: x[2])
+
+    l = ll[0] - (rr[0] - ll[0]) / 20
+    r = rr[0] + (rr[0] - ll[0]) / 20
+    b = bb[1] - (tt[1] - bb[1]) / 20
+    t = tt[1] + (tt[1] - bb[1]) / 20
+    n = nn[2] - (ff[2] - nn[2]) / 20
+    f = ff[2] + (ff[2] - nn[2]) / 20
+
+    m = m_view_port(location_image_x, location_image_y, image_width, image_height).dot(m_proj_o(l, r, b, t, n, f))
+
+    for face in faces:
+        v1 = vertices[face[0][0]]
+        v2 = vertices[face[1][0]]
+        v3 = vertices[face[2][0]]
+
+        if back_face_culling([0, 0, 0], v1, v2, v3) >= 0:
             continue
 
         v1 = m.dot(v1)
@@ -226,13 +351,18 @@ def get_texture_image(obj_path: str, texture_path: str,
 
         for i in range(x_min, x_max + 1):
             for j in range(y_min, y_max + 1):
-                a, b, c = get_barycentric_coords([i, j], v1, v2, v3)
+                a, b, c = get_barycentric_coordinates([i, j], v1, v2, v3)
                 if a >= 0 and b >= 0 and c >= 0:
                     z = a * v1[2] + b * v2[2] + c * v3[2]
-                    if -z < z_buffer[image_height - j - location_image_y, i - location_image_x]:
-                        z_buffer[image_height - j - location_image_y, i - location_image_x] = -z
+                    if -z < z_buffer[view_height - j, i]:
+                        z_buffer[view_height - j, i] = -z
                         u = a * texture_v[face[0][1]][0] + b * texture_v[face[1][1]][0] + c * texture_v[face[2][1]][0]
                         v = a * texture_v[face[0][1]][1] + b * texture_v[face[1][1]][1] + c * texture_v[face[2][1]][1]
                         image[view_height - j][i] = texture_img[len(texture_img) - round(v * len(texture_img))][
                             round(u * len(texture_img[0]))]
     return image
+
+
+def get_texture_image_with_with_light(view_height: int, view_width: int, image_height: int, image_width: int,
+                                      location_image_x: int, location_image_y: int, model: Model):
+    pass
