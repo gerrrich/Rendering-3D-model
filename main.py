@@ -12,6 +12,7 @@ image1 = get_wire_image(1024, 1024, 500, 500, 8, 16 + 500, model)
 image2 = get_face_image(1024, 1024, 500, 500, 16 + 500, 16 + 500, model)
 image3 = get_texture_image(1024, 1024, 500, 500, 8, 8, model)
 image4 = get_texture_image_with_with_light(1024, 1024, 500, 500, 16 + 500, 8, model)
+
 image = np.zeros((1024, 1024, 3), dtype=np.uint8)
 
 for i in range(1024):
@@ -27,4 +28,5 @@ for i in range(1024):
 
 fig = plt.figure(figsize=(10, 10))
 plt.imshow(image)
+plt.imsave('man.jpeg', image)
 plt.show()

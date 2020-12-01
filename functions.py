@@ -97,7 +97,7 @@ def norm(v):
 def back_face_culling(p, v0, v1, v2):
     v1 = np.array([v1[0] - v0[0], v1[1] - v0[1], v1[2] - v0[2]])
     v2 = np.array([v2[0] - v0[0], v2[1] - v0[1], v2[2] - v0[2]])
-    # v0 = np.array([v0[0] - p[0], v0[1] - p[1], v0[2] - p[2]])
+    v0 = np.array([v0[0] - p[0], v0[1] - p[1], v0[2] - p[2]])
     nn = norm(np.cross(v1, v2))
     s = np.inner(np.array([0, 0, -1]), nn)
     # s = np.inner(v0, nn)
@@ -219,7 +219,7 @@ class Model:
 
 
 def get_wire_image(view_height: int, view_width: int, image_height: int, image_width: int,
-                   location_image_x: int, location_image_y: int, model: Model):
+                   location_image_x: int, location_image_y: int, *models: Model):
     image = np.zeros((view_height, view_width, 3), dtype=np.uint8)
     image[:] = np.array([150, 150, 150])
 
@@ -227,8 +227,12 @@ def get_wire_image(view_height: int, view_width: int, image_height: int, image_w
         for i in range(location_image_x, location_image_x + image_width):
             image[view_height - j - 1][i] = np.array([0, 0, 0], dtype=np.uint8)
 
-    vertices = model.new_vertices
-    faces = model.faces
+    vertices = []
+    faces = []
+
+    for model in models:
+        vertices.extend(model.new_vertices)
+        faces.extend(model.faces)
 
     ll = min(vertices, key=lambda x: x[0])
     rr = max(vertices, key=lambda x: x[0])
@@ -277,6 +281,7 @@ def get_face_image(view_height: int, view_width: int, image_height: int, image_w
 
     vertices = model.new_vertices
     faces = model.faces
+    camera = np.array([model.camera[0], model.camera[1], model.camera[2], 1])
 
     ll = min(vertices, key=lambda x: x[0])
     rr = max(vertices, key=lambda x: x[0])
@@ -299,7 +304,7 @@ def get_face_image(view_height: int, view_width: int, image_height: int, image_w
         v2 = vertices[face[1][0]]
         v3 = vertices[face[2][0]]
 
-        color = back_face_culling([0, 0, 0], v1, v2, v3)
+        color = back_face_culling(camera, v1, v2, v3)
 
         if color >= 0:
             continue
@@ -343,6 +348,7 @@ def get_texture_image(view_height: int, view_width: int, image_height: int, imag
     texture_img = model.texture_img
     texture_v = model.texture_v
     faces = model.faces
+    camera = np.array([model.camera[0], model.camera[1], model.camera[2], 1])
 
     ll = min(vertices, key=lambda x: x[0])
     rr = max(vertices, key=lambda x: x[0])
@@ -365,7 +371,7 @@ def get_texture_image(view_height: int, view_width: int, image_height: int, imag
         v2 = vertices[face[1][0]]
         v3 = vertices[face[2][0]]
 
-        if back_face_culling([0, 0, 0], v1, v2, v3) >= 0:
+        if back_face_culling(camera, v1, v2, v3) >= 0:
             continue
 
         v1 = m.dot(v1)
