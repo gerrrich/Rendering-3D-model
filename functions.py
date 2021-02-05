@@ -1,6 +1,5 @@
 import numpy as np
 import matplotlib.image as img
-import xxsubtype
 
 
 def draw_line(x0, y0, x1, y1, image, color, location_x, location_y, view_height):
@@ -117,23 +116,20 @@ def get_barycentric_coordinates(p, v0, v1, v2):
     return a, b, c
 
 
-def cos_vec(L1, N1):
-    L = norm(L1)
-    N = norm(N1)
-
-    return L[0] * N[0] + L[1] * N[1] + L[2] * N[2]
-
-
 def lighting(ka, ia, kd, id, ks, Is, N, L, V, alp, a, b, c, d):
     # (1, 25, 0.8, 180, 0.8, 255, norm(N), sun, camera, 10, 1, 0.02, 0.004, d)
+    L = norm(np.array([L[0], L[1], L[2]]))
+    N = norm(np.array([N[0], N[1], N[2]]))
+    V = norm(np.array([V[0], V[1], V[2]]))
+
     la = ka * ia  # 25
-    ld = kd * id * cos_vec(L, N)  # 0-150
-    r = 2 * cos_vec(L, N) * N / norm(N) - L
-    ls = ks * Is * (cos_vec(r, V)) ** alp  # 0-205
+    ld = kd * id * np.inner(L, N)  # 0-150
+    r = 2 * np.inner(L, N) * N - L
+    ls = ks * Is * (np.inner(r, V)) ** alp  # 0-205
     ans = la + (ld + ls)  # 25-380
     ans2 = a + b * d + c * d ** 2  # 1+0.02*d+0.004*d
     # print(cos_vec(L, N))
-    return la + (ld + ls) / (a + b * d + c * d ** 2)  # должен быть от 0 до 115 примерно
+    return la + (ld + ls) / (aч + b * d + c * d ** 2)  # должен быть от 0 до 115 примерно
 
 
 class LocalToWorld:
@@ -173,7 +169,7 @@ class WorldToCamera:
 
 
 class Model:
-    def __init__(self, obj_path: str, texture_path: str, sun: np.ndarray):
+    def __init__(self, obj_path: str, texture_path: str):
         self.obj_path = obj_path
         self.texture_path = texture_path
 
@@ -187,8 +183,7 @@ class Model:
         self.normals = []
         self.new_normals = []
         self.faces = []
-        self.sun = sun
-        self.camera = 0
+        self.camera = np.array([0])
 
         for line in obj:
             temp = line[:-1].split()
@@ -211,7 +206,6 @@ class Model:
     def create_camera_coordinates(self, l2w: LocalToWorld, w2c: WorldToCamera):
         m = w2c.get_matrix().dot(l2w.get_matrix())
         mn = np.linalg.inv(m).T
-        self.sun = m.dot(self.sun)
         self.camera = w2c.camera_location_vec
         for i in range(len(self.vertices)):
             self.new_vertices.append(m.dot(self.vertices[i]))
@@ -398,7 +392,7 @@ def get_texture_image(view_height: int, view_width: int, image_height: int, imag
 
 
 def get_texture_image_with_with_light(view_height: int, view_width: int, image_height: int, image_width: int,
-                                      location_image_x: int, location_image_y: int, model: Model):
+                                      location_image_x: int, location_image_y: int, sun: np.ndarray, model: Model):
     image = np.zeros((view_height, view_width, 3), dtype=np.uint8)
     z_buffer = np.ones((view_height, view_width), dtype=np.float)
     image[:] = np.array([150, 150, 150])
@@ -412,7 +406,6 @@ def get_texture_image_with_with_light(view_height: int, view_width: int, image_h
     texture_v = model.texture_v
     normals = model.new_normals
     faces = model.faces
-    sun = model.sun
     camera = np.array([model.camera[0], model.camera[1], model.camera[2], 1])
 
     ll = min(vertices, key=lambda x: x[0])
@@ -451,9 +444,9 @@ def get_texture_image_with_with_light(view_height: int, view_width: int, image_h
         v2 = m.dot(vv2)
         v3 = m.dot(vv3)
 
-        vn1 = mn.dot(vn1)
-        vn2 = mn.dot(vn2)
-        vn3 = mn.dot(vn3)
+        # vn1 = mn.dot(vn1)
+        # vn2 = mn.dot(vn2)
+        # vn3 = mn.dot(vn3)
 
         x_min = int(np.floor(min(v1, v2, v3, key=lambda x: x[0])[0]))
         x_max = int(np.ceil(max(v1, v2, v3, key=lambda x: x[0])[0]))
@@ -471,11 +464,12 @@ def get_texture_image_with_with_light(view_height: int, view_width: int, image_h
 
                 d = np.sqrt((p[0] - sun[0]) ** 2 + (p[1] - sun[1]) ** 2 + (p[2] - sun[2]) ** 2)
                 # print(d)
+                p = -p
 
-                light1 = lighting(1, 25, 0.8, 180, 0.8, 255, norm(N), new_sun, camera, 10, 1, 0.02, 0.004, d)
-                light2 = lighting(1, 25, 1, 150, 0.8, 255, norm(N), new_sun, camera, 10, 1, 0.02, 0.004, d)
-                light3 = lighting(1, 25, 0.9, 190, 0.8, 255, norm(N), new_sun, camera, 10, 1, 0.02, 0.004, d)
-                # print(light1, light2, light3, d)
+                light1 = lighting(1, 25, 0.8, 180, 0.8, 255, N, sun, p, 10, 1, 0.02, 0.004, d)
+                light2 = lighting(1, 25, 1, 150, 0.8, 255, N, sun, p, 10, 1, 0.02, 0.004, d)
+                light3 = lighting(1, 25, 0.9, 190, 0.8, 255, N, sun, p, 10, 1, 0.02, 0.004, d)
+                # print(light1, light2, light3)
 
                 if a >= 0 and b >= 0 and c >= 0:
                     z = a * v1[2] + b * v2[2] + c * v3[2]
@@ -486,12 +480,25 @@ def get_texture_image_with_with_light(view_height: int, view_width: int, image_h
 
                         color = texture_img[len(texture_img) - round(v * len(texture_img))][
                             round(u * len(texture_img[0]))]
+
                         color1 = round(color[0] * light1 / 255)
-                        color1 = 255 if color1 > 255 else color1
+                        if color1 > 255:
+                            color1 = 255
+                        elif color1 < 0:
+                            color1 = 0
+
                         color2 = round(color[1] * light2 / 255)
-                        color2 = 255 if color2 > 255 else color2
+                        if color2 > 255:
+                            color2 = 255
+                        elif color2 < 0:
+                            color2 = 0
+
                         color3 = round(color[2] * light3 / 255)
-                        color3 = 255 if color3 > 255 else color3
+                        if color3 > 255:
+                            color3 = 255
+                        elif color3 < 0:
+                            color3 = 0
+
                         color = np.array([color1, color2, color3])
 
                         image[view_height - j][i] = color
